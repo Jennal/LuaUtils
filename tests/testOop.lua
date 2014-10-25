@@ -31,7 +31,7 @@ TestOop = {}
             return {x = 1, y = 2}
         end)
 
-        local p = Point.new()
+        local p = Point:new()
         assertEquals(p.x, 1)
         assertEquals(p.y, 2)
 
@@ -100,10 +100,11 @@ TestOop = {}
         assertEquals(o.y, 2)
 
         local Delivery = Oop.inheritSingle("Delivery", Base)
-        assertEquals(Delivery.x, 1)
-        assertEquals(Delivery.y, 2)
+        assertNotEquals(Delivery.x, 1)
+        assertNotEquals(Delivery.y, 2)
 
         function Delivery:ctor()
+            Delivery.super.Base.ctor(self)
             self.x = 10
         end
 
@@ -153,7 +154,7 @@ TestOop = {}
         function D:ctor()
             D.super.B.ctor(self)
             D.super.C.ctor(self)
-            
+
             self.member = 10
         end
 
