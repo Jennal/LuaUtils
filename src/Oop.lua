@@ -1,16 +1,16 @@
+local InheritType = {
+    FINAL     = 0,
+    CPP       = 1,
+    LUA       = 2,
+    INTERFACE = 3,
+}
+
 local Oop = {}
 
 Oop.Obj = {
     __cname = "Obj",
-    __ctype = 2, -- lua
-    ctor = function(self, ...)
-        self:superCtor(...)
-    end,
-    superCtor = function(self, ...)
-        if self.class and not self.class.__multi_inheirt and self.class.super and self.class.super.ctor then
-            return self.class.super.ctor(self, ...)
-        end
-    end
+    __ctype = InheritType.LUA, -- lua
+    ctor = function(self, ...) end
 }
 
 function Oop.Obj.new(self, ...)
@@ -24,25 +24,7 @@ function Oop.Obj.new(self, ...)
     return instance
 end
 
-local clone = clone or function(object)
-    local lookup_table = {}
-    local function _copy(object)
-        if type(object) ~= "table" then
-            return object
-        elseif lookup_table[object] then
-            return lookup_table[object]
-        end
-        local new_table = {}
-        lookup_table[object] = new_table
-        for key, value in pairs(object) do
-            new_table[_copy(key)] = _copy(value)
-        end
-        return setmetatable(new_table, getmetatable(object))
-    end
-    return _copy(object)
-end
-
-local class = class or function(classname, super)
+local function class(classname, super)
     local superType = type(super)
     local cls
 
@@ -51,7 +33,7 @@ local class = class or function(classname, super)
         super = nil
     end
 
-    if superType == "function" or (super and super.__ctype == 1) then
+    if superType == "function" or (super and super.__ctype == InheritType.CPP) then
         -- inherited from native C++ Object
         cls = {}
 
@@ -62,13 +44,13 @@ local class = class or function(classname, super)
             cls.super    = super
         else
             cls.__create = super
+            cls.ctor = Oop.Obj.ctor
         end
 
-        cls.ctor    = function() end
         cls.__cname = classname
-        cls.__ctype = 1
+        cls.__ctype = InheritType.CPP
 
-        function cls.new(...)
+        function cls:new(...)
             local instance = cls.__create(...)
             -- copy fields from class to native object
             for k,v in pairs(cls) do instance[k] = v end
@@ -80,17 +62,18 @@ local class = class or function(classname, super)
     else
         -- inherited from Lua Object
         if super then
-            cls = clone(super)
+            cls = {}
+            setmetatable(cls, {__index = super})
             cls.super = super
         else
             cls = {ctor = function() end}
         end
 
         cls.__cname = classname
-        cls.__ctype = 2 -- lua
+        cls.__ctype = InheritType.LUA -- lua
         cls.__index = cls
 
-        function cls.new(...)
+        function cls:new(...)
             local instance = setmetatable({}, cls)
             instance.class = cls
             instance:ctor(...)
@@ -108,6 +91,7 @@ local function create_class(name, super)
     
     local o = super:new()
     o.__cname = name
+    o.__multi_inheirt = false
     o.class   = false -- means this is not instance
     o.super   = super
     
@@ -138,7 +122,7 @@ function Oop.interface(name, funcs, members)
     end
     
     infc.__cname = name
-    infc.__ctype = 3 -- interface
+    infc.__ctype = InheritType.INTERFACE -- interface
     infc.interfaces = _funcs
     infc.members    = _members
     
@@ -165,15 +149,23 @@ end
 
 function Oop.class(name, ...)
     local supers = {...}
+    local cls
     if #supers > 1 then
-        return Oop.inheritMulti(name, supers)
+        cls = Oop.inheritMulti(name, supers)
     else
-        return Oop.inheritSingle(name, supers[1])
+        cls = Oop.inheritSingle(name, supers[1])
     end
+    
+    cls[name] = cls -- make A.super.B possible
+    
+    return cls
 end
 
 function Oop.inheritSingle(name, super)
-    -- return class(name, super)
+    if type(super) ~= "function" and super.__ctype == InheritType.FINAL then
+        error("can't inherit from final obeject", 2)
+    end
+    
     return create_class(name, super)
 end
 
@@ -185,6 +177,26 @@ local function search(list, key)
     end
 end
 
+local function copy_from_super(instance, super)
+    local s = super
+    while s do
+        for k, v in pairs(s) do
+            if not instance[k] then
+                instance[k] = v
+            end
+        end
+        
+        if s.__multi_inheirt then
+            for k, v in pairs(s.super) do
+                copy_from_super(instance, v)
+            end
+            break
+        end
+
+        s = s.super
+    end 
+end
+
 function Oop.inheritMulti(name, supers)
     local cls = {}
     
@@ -194,9 +206,33 @@ function Oop.inheritMulti(name, supers)
     cls.super = {}
     
     for _, super in ipairs(supers) do
+        if super.__ctype == InheritType.FINAL then
+            error("can't inherit from final obeject", 2)
+        end
+    
     	cls.super[super.__cname] = super
+        if super.__ctype == InheritType.CPP then
+            if cls.__create then error("can't mutiple inherit from cpp obeject", 2) end
+            cls.__create = super.__create
+            cls.__ctype  = InheritType.FINAL -- inherit from cpp obj, final inherit
+        end
     end
     
+    -- inherit from cpp
+    if cls.__create then
+        cls.ctor = function(self, ...) end
+        cls.new = function(self, ...)
+            local instance = cls.__create(...)
+            -- copy from supers
+            copy_from_super(instance, self)
+
+            instance.class = self
+            instance:ctor(...)
+            
+            return instance
+        end
+    end
+
     setmetatable(cls, {
         __index = function(t, k)
             return search(supers, k)

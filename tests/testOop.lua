@@ -1,6 +1,4 @@
-require("luaunit")
-
-package.path = package.path .. ";../src/?.lua;../src/?/init.lua"
+require("extern")
 Oop = require("Oop")
 
 TestOop = {}
@@ -43,9 +41,51 @@ TestOop = {}
             self.y = y
         end
 
-        p = Point.new(10, 20)
+        p = Point:new(10, 20)
         assertEquals(p.x, 10)
         assertEquals(p.y, 20)
+    end
+
+    function TestOop:testFinalInherit()
+        local Point = Oop.class("Point", function()
+            return {x = 1, y = 2}
+        end)
+
+        -- inheirt from function can do depth single inherit
+        local P1 = Oop.class("P1", Point)
+        local P2 = Oop.class("P2", P1)
+        local P3 = Oop.class("P3", P2)
+
+        local p = P1:new()
+        assertEquals(1, p.x)
+        assertEquals(2, p.y)
+
+        p = P2:new()
+        assertEquals(1, p.x)
+        assertEquals(2, p.y)
+
+        p = P3:new()
+        assertEquals(1, p.x)
+        assertEquals(2, p.y)
+
+        -- multi inheirt from function only support with one
+        assertErrorMsgContains('can\'t mutiple inherit from cpp obeject', function()
+            local MP1 = Oop.class("MP1", P2, P1)
+        end)
+
+        -- inheirt from function can only be multi inherit once
+        local MP2 = Oop.class("MP2", P2, Oop.Obj) -- become final class
+        p = MP2:new()
+        assertEquals(1, p.x)
+        assertEquals(2, p.y)
+
+        assertErrorMsgContains("can't inherit from final obeject", function()
+            local MP3 = Oop.class("MP3", MP2)
+        end)
+
+        assertErrorMsgContains("can't inherit from final obeject", function()
+            local MP4 = Oop.class("MP4", MP2, Oop.Obj)
+        end)
     end
 
     function TestOop:testInheritSingle()
@@ -73,6 +113,13 @@ TestOop = {}
         assertEquals(obj.y, 2)
     end
 
+    function TestOop:testInheritSingleWithOutCtor()
+        local Base = Oop.class("Base", Oop.Obj)
+
+        local o = Base:new()
+        assertTrue(o)
+    end
+
     function TestOop:testInheritMulti()
         local IA = Oop.interface("IA", {
             {"func1", "(p1, p2)", "IA.func1 desc"},
@@ -97,9 +144,9 @@ TestOop = {}
 
         local D = Oop.class("D", IA, B, C)
 
-        local o = D:new()
+        local o = D:new() -- automatic super ctor call
         assertTrue(o:bool())
-        assertEquals("bool", o.bb) -- trick, because the first equal key in __index
+        assertEquals("bool", o.bb) -- trick D inheirt ctor from B
         assertNotEquals("cool", o.cc)
         assertErrorMsgContains("IA.member is not defined", function() local a = o.member end)
         assertErrorMsgContains("IA.func1(p1, p2) is not implemented", function() o:func1() end)
@@ -107,6 +154,7 @@ TestOop = {}
         function D:ctor()
             D.super.B.ctor(self)
             D.super.C.ctor(self)
+            
             self.member = 10
         end
 
@@ -125,7 +173,7 @@ TestOop = {}
         local E = Oop.class("E", D)
         
         function E:ctor()
-            self:superCtor()
+            E.super.D.ctor(self)
             self.ee = 11
         end
 
@@ -206,7 +254,53 @@ TestOop = {}
         assertTrue(Oop.isClass(o, "C"))
         assertTrue(Oop.isClass(o, "D"))
     end
--- end of table TestOop
 
-local lu = LuaUnit.new()
-os.exit(lu:runSuite())
+    function TestOop:testMultiInheiritSuperCtor()
+        local Attack = require("Logic.Interface.Attack")
+        local Sprite = Oop.class("Sprite", function() return {x=1, y=2} end)
+        local Base1 = Oop.class("Base1", Oop.Obj)
+        local Test = Oop.class("Test", Sprite, Base1, Attack.Attackive)
+
+        local o = Test:new()
+        -- print("o.x, o.y", o, o.x, o.y)
+        assertEquals(1, o.x)
+        assertEquals(2, o.y)
+
+        function Base1:ctor()
+            -- print("Base1:ctor", self, self.class.__cname)
+            self.d = "d"
+        end
+
+        function Sprite:ctor()
+            -- print("Sprite:ctor", self, self.class.__cname)
+            self.x = 10
+            self.y = 20
+        end
+
+        function Test:ctor()
+            Test.super.Sprite.ctor(self)
+            Test.super.Base1.ctor(self)
+        end
+
+        o = Test:new()
+        -- print("o.x, o.y, o.d", o, o.x, o.y, o.d)
+        assertEquals(10, o.x)
+        assertEquals(20, o.y)
+        assertEquals("d", o.d)
+
+        function Test:ctor(...)
+            Test.super.Sprite.ctor(self)
+            Test.super.Base1.ctor(self)
+
+            -- print("Test:ctor", self, self.class.__cname)
+            self.z = 30
+        end
+
+        o = Test:new()
+        -- print("o.x, o.y, o.z, o.d", o, o.x, o.y, o.z, o.d)
+        assertEquals(10, o.x)
+        assertEquals(20, o.y)
+        assertEquals(30, o.z)
+        assertEquals("d", o.d)
+    end
+-- end of table TestOop
