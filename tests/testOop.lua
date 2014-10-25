@@ -1,4 +1,3 @@
-require("extern")
 Oop = require("Oop")
 
 TestOop = {}
@@ -256,7 +255,11 @@ TestOop = {}
     end
 
     function TestOop:testMultiInheiritSuperCtor()
-        local Attack = require("Logic.Interface.Attack")
+        local IAttackive = Oop.interface("IAttackive", {
+            {"attack", "(monster)", "attack monster"},
+        },{
+        })
+        local Attack = Oop.class("Attack", IAttackive, Oop.Obj)
         local Sprite = Oop.class("Sprite", function() return {x=1, y=2} end)
         local Base1 = Oop.class("Base1", Oop.Obj)
         local Test = Oop.class("Test", Sprite, Base1, Attack.Attackive)
