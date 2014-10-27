@@ -217,7 +217,7 @@ function Oop.inheritMulti(name, supers)
 end
 
 function Oop.isClass(obj, name)
-    if type(obj) ~= "table" then
+    if type(obj) ~= "table" and type(obj) ~= "userdata" then
         return false
     end
 
