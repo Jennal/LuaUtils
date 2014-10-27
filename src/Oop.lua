@@ -74,7 +74,9 @@ local function create_class_from_func(classname, super)
         local instance = self:__create(...)
 
         -- copy fields from class to native object
+        for k,v in pairs(self) do instance[k] = v end -- TODO: why this make it work?
         copy_from_super(instance, self)
+        
         instance.class = self
         instance:ctor(...)
         
