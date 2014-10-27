@@ -57,30 +57,30 @@ local function create_class_from_func(classname, super)
     -- inherited from native C++ Object
     cls = {}
 
+    cls.__cname = classname
+    cls.__ctype = InheritType.CPP
+
     if superType == "table" then
         -- copy fields from super
         for k,v in pairs(super) do cls[k] = v end
         cls.__create = super.__create
         cls.super    = super
+        cls.new      = super.new
     else
         cls.__create = function(self, ...) return super(...) end
         cls.ctor = Oop.Obj.ctor
-    end
+        function cls:new(...)
+            local instance = self:__create(...)
 
-    cls.__cname = classname
-    cls.__ctype = InheritType.CPP
+            -- copy fields from class to native object
+            for k,v in pairs(self) do instance[k] = v end -- TODO: why this make it work?
+            copy_from_super(instance, self)
 
-    function cls:new(...)
-        local instance = self:__create(...)
+            instance.class = self
+            instance:ctor(...)
 
-        -- copy fields from class to native object
-        for k,v in pairs(self) do instance[k] = v end -- TODO: why this make it work?
-        copy_from_super(instance, self)
-        
-        instance.class = self
-        instance:ctor(...)
-        
-        return instance
+            return instance
+        end
     end
 
     return cls
