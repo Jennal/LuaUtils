@@ -57,12 +57,10 @@ local function create_class_from_func(classname, super)
     -- inherited from native C++ Object
     cls = {}
 
-    cls.__cname = classname
-    cls.__ctype = InheritType.CPP
-
     if superType == "table" then
         -- copy fields from super
-        for k,v in pairs(super) do cls[k] = v end
+        -- for k,v in pairs(super) do cls[k] = v end
+        cls = Oop.Obj.__create(super)
         cls.__create = super.__create
         cls.super    = super
         cls.new      = super.new
@@ -82,6 +80,10 @@ local function create_class_from_func(classname, super)
             return instance
         end
     end
+    
+    cls.__cname = classname
+    cls.__ctype = InheritType.CPP
+    cls.__multi_inheirt = false
 
     return cls
 end
@@ -169,7 +171,7 @@ function Oop.class(name, ...)
 end
 
 function Oop.inheritSingle(name, super)
-    if type(super) ~= "function" and super.__ctype == InheritType.FINAL then
+    if super and type(super) ~= "function" and super.__ctype == InheritType.FINAL then
         error("can't inherit from final obeject", 2)
     end
     
@@ -177,7 +179,9 @@ function Oop.inheritSingle(name, super)
 end
 
 local function search(list, key)
-    for _, super in ipairs(list) do
+    local super
+    for i = 1, #list do
+        super = list[i]
         if super[key] then
             return super[key]
         end
@@ -199,11 +203,12 @@ function Oop.inheritMulti(name, supers)
     
     	cls.super[super.__cname] = super
         if super.__ctype == InheritType.CPP then
-            if cls.__ctype == InheritType.FINAL then error("can't mutiple inherit from cpp obeject", 2) end
+            if cls.__ctype == InheritType.CPP then error("can't mutiple inherit from cpp obeject", 2) end
             
             cls.__create = super.__create
             cls.new      = super.new
-            cls.__ctype  = InheritType.FINAL -- inherit from cpp obj, final inherit
+            cls.__ctype  = InheritType.CPP
+            -- cls.__ctype  = InheritType.FINAL -- inherit from cpp obj, final inherit
         end
     end
 
