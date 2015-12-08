@@ -11,6 +11,8 @@ Lua Utils to make lua functional
 * constructor support
 * call single/multi super class' constructor support
 * call multi super classes' conflict name function/member support
+* extend after inherit support
+* class/super class type check support
 
 ### Tests
 
