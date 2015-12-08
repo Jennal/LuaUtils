@@ -107,6 +107,32 @@ local function create_class(name, super)
     return o
 end
 
+local function clone_depth(t, cache)
+    if type(t) ~= "table" then
+        return t
+    end
+    local tmp = {}
+    cache = cache or {}
+    for k,v in pairs(t) do
+        if type(v) == "table" and not cache[v] then
+            cache[v] = true
+            tmp[k] = clone_depth(v,cache)
+        else
+            tmp[k] = v    
+        end
+    end
+
+    return tmp
+end
+
+function Oop.Obj.clone(self)
+    assert(self.class, "self should be instance")
+
+    local o = clone_depth(self)
+    setmetatable(o, self.class)
+    return o
+end
+
 --- to define interface
 -- @usage Test = Oop.interface({
 --  {"func1", "(param1, param2) void", "description"},
@@ -126,7 +152,7 @@ function Oop.interface(name, funcs, members)
     
     if members then
         for _, val in ipairs(members) do
-        	_members[val[1]] = val
+            _members[val[1]] = val
         end
     end
     
@@ -201,7 +227,7 @@ function Oop.inheritMulti(name, supers)
             error("can't inherit from final obeject", 2)
         end
     
-    	cls.super[super.__cname] = super
+        cls.super[super.__cname] = super
         if super.__ctype == InheritType.CPP then
             if cls.__ctype == InheritType.CPP then error("can't mutiple inherit from cpp obeject", 2) end
             
@@ -219,6 +245,38 @@ function Oop.inheritMulti(name, supers)
     })
 
     return cls
+end
+
+function Oop.extend(obj, class, ...)
+    copy_from_super(obj, class)
+    if obj.class then
+        obj.class.super = obj.super or {}
+        obj.class.super[class.__cname] = class
+    else
+        obj.super = obj.super or {}
+        obj.super[class.__cname] = class
+    end
+    if type(class.ctor) == "function" then
+        class.ctor(obj, ...)
+    end
+end
+
+function Oop.isSameClass(obj1, obj2)
+    if type(obj1) ~= "table" and type(obj1) ~= "userdata" then
+        return false
+    end
+
+    if type(obj2) ~= "table" and type(obj2) ~= "userdata" then
+        return false
+    end
+
+    local cls1 = obj1.class or obj1
+    local cls2 = obj2.class or obj2
+
+    if not cls1.__cname then return false end
+    if not cls2.__cname then return false end
+
+    return cls1.__cname == cls2.__cname
 end
 
 function Oop.isClass(obj, name)
